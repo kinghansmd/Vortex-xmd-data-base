@@ -37,6 +37,7 @@ const {
   const { fromBuffer } = require('file-type')
   const bodyparser = require('body-parser')
   const os = require('os')
+  const { execSync } = require('child_process');
   const Crypto = require('crypto')
   const path = require('path')
   const prefix = config.PREFIX
@@ -80,7 +81,7 @@ console.log("Session downloaded ✅")
   //=============================================
   
   async function connectToWA() {
-  console.log("Connecting silva spark to WhatsApp ⏳️...");
+  console.log("Connecting Vortex xmd to WhatsApp ⏳️...");
   const { state, saveCreds } = await useMultiFileAuthState(__dirname + '/sessions/')
   var { version } = await fetchLatestBaileysVersion()
   
@@ -92,21 +93,56 @@ console.log("Session downloaded ✅")
           auth: state,
           version
           })
-      
-  conn.ev.on('connection.update', (update) => {
-  const { connection, lastDisconnect } = update
-  if (connection === 'close') {
-  if (lastDisconnect.error.output.statusCode !== DisconnectReason.loggedOut) {
-  connectToWA()
-  }
-  } else if (connection === 'open') {
-  console.log('🧬 Installing vortex xmd Plugins')
-  const path = require('path');
-  fs.readdirSync("./plugins/").forEach((plugin) => {
-  if (path.extname(plugin).toLowerCase() == ".js") {
-  require("./plugins/" + plugin);
-  }
-  });
+          
+const GITHUB_REPO = 'https://github.com/kinghansmd/Vortex-xmd-data-base/tree/main/plugins';
+const RAW_REPO = 'https://raw.githubusercontent.com/kinghansmd/Vortex-xmd-data-base/main/plugins/';
+const PLUGINS_DIR = './plugins/';
+
+// Function to download plugins
+async function downloadPlugins() {
+    try {
+        console.log('📥 Downloading plugins from GitHub...');
+        execSync(`rm -rf ${PLUGINS_DIR} && mkdir -p ${PLUGINS_DIR}`);
+
+        const { data } = await axios.get(GITHUB_REPO);
+        const matches = [...data.matchAll(/href="\/kinghansmd\/Vortex-xmd-data-base\/blob\/main\/plugins\/(.*?)"/g)];
+        const files = matches.map(match => match[1]).filter(file => file.endsWith('.js'));
+
+        for (const file of files) {
+            const rawUrl = `${RAW_REPO}${file}`;
+            const filePath = path.join(PLUGINS_DIR, file);
+            const response = await axios.get(rawUrl);
+            fs.writeFileSync(filePath, response.data);
+            console.log(`✅ Downloaded: ${file}`);
+        }
+        console.log('🚀 Plugins updated successfully!');
+    } catch (err) {
+        console.error('❌ Failed to download plugins:', err.message);
+    }
+}
+
+// Load plugins
+function loadPlugins() {
+    console.log('🧬 Installing Vortex XMD Plugins...');
+    fs.readdirSync(PLUGINS_DIR).forEach(plugin => {
+        if (path.extname(plugin).toLowerCase() === '.js') {
+            require(path.join(__dirname, PLUGINS_DIR, plugin));
+        }
+    });
+}
+
+conn.ev.on('connection.update', async (update) => {
+    const { connection, lastDisconnect } = update;
+    if (connection === 'close') {
+        if (lastDisconnect.error.output.statusCode !== DisconnectReason.loggedOut) {
+            connectToWA();
+        }
+    } else if (connection === 'open') {
+        await downloadPlugins();
+        loadPlugins();
+    }
+});
+
   console.log('Plugins installed successful ✅')
   console.log('Bot connected to whatsapp ✅')
   
